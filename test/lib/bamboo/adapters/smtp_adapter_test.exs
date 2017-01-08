@@ -3,6 +3,7 @@ defmodule Bamboo.SMTPAdapterTest do
 
   alias Bamboo.Email
   alias Bamboo.SMTPAdapter
+  alias Bamboo.Attachment
 
   defmodule FakeGenSMTP do
     use GenServer
@@ -194,6 +195,27 @@ defmodule Bamboo.SMTPAdapterTest do
     end
   end
 
+  test "emails with attachment" do
+    path = Path.join(__DIR__, "../../../support/attachment.docx")
+
+    attachment = Attachment.new(path, content_type: "application/msword")
+
+    bamboo_email = new_email(attachments: [attachment]) #|> put_attachment(path)
+    bamboo_config = configuration
+    :ok = SMTPAdapter.deliver(bamboo_email, bamboo_config)
+
+    assert 1 = length(FakeGenSMTP.fetch_sent_emails)
+
+    [{{from, to, raw_email}, gen_smtp_config}] = FakeGenSMTP.fetch_sent_emails
+    [multipart_header] =
+      Regex.run(
+        ~r{Content-Type: multipart/mixed; boundary="([^"]+)"\r\n},
+        raw_email,
+        capture: :all_but_first)
+
+    IO.inspect raw_email
+  end
+
   test "emails looks fine when only text body is set" do
     bamboo_email = new_email(text_body: nil)
     bamboo_config = configuration
@@ -208,7 +230,7 @@ defmodule Bamboo.SMTPAdapterTest do
       Regex.run(
         ~r{Content-Type: multipart/alternative; boundary="([^"]+)"\r\n},
         raw_email,
-        capture: :all_but_first)
+        capture: :all_but_first)        
 
     assert format_email_as_string(bamboo_email.from, false) == from
     assert format_email(bamboo_email.to ++ bamboo_email.cc ++ bamboo_email.bcc, false) == to
