@@ -128,13 +128,19 @@ defmodule Bamboo.SMTPAdapter do
   defp add_multipart_header(body, delimiter) do
     add_smtp_header_line(body, "Content-Type", ~s(multipart/alternative; boundary="#{delimiter}"))
   end
+ 
+  defp add_multipart_mixed_header(body, delimiter) do
+    add_smtp_header_line(body, "Content-Type", ~s(multipart/mixed; boundary="#{delimiter}"))  
+  end
 
   defp add_smtp_header_line(body, type, content) when is_list(content) do
     Enum.reduce(content, body, &add_smtp_header_line(&2, type, &1))
   end
+
   defp add_smtp_header_line(body, type, content) when is_atom(type) do
     add_smtp_header_line(body, String.capitalize(to_string(type)), content)
   end
+
   defp add_smtp_header_line(body, type, content) when is_binary(type) do
     add_smtp_line(body, "#{type}: #{content}")
   end
@@ -149,10 +155,10 @@ defmodule Bamboo.SMTPAdapter do
     "=?UTF-8?B?#{Base.encode64(content)}?="
   end
 
-  defp add_text_body(body, %Bamboo.Email{text_body: text_body}, _multi_part_delimiter)
-  when text_body == nil do
+  defp add_text_body(body, %Bamboo.Email{text_body: text_body}, _multi_part_delimiter) when text_body == nil do
     body
   end
+
   defp add_text_body(body, %Bamboo.Email{text_body: text_body}, multi_part_delimiter) do
     body
     |> add_multipart_delimiter(multi_part_delimiter)
@@ -161,6 +167,40 @@ defmodule Bamboo.SMTPAdapter do
     |> add_smtp_line(text_body)
   end
 
+  defp add_multipart_mixed_split(body, delimiter), do: "#{body}\r\n--#{delimiter}\r\n"
+ 
+  defp add_attachment_header(body, filename) do
+    "#{body}Content-Type: text/plain; charset=ISO-8859-1; name=\"#{filename}\"\r\n" <>
+    "Content-Disposition: attachment; filename=\"#{filename}\"\r\n" <>
+    "Content-Transfer-Encoding: base64\r\n" <>
+    "X-Attachment-Id: f_isu9uy5p0\r\n"    
+  end
+ 
+  defp add_attachment_body(body, attachment) do
+    file = File.read!(attachment)
+    "#{body}\r\n#{Base.encode64(file)}\r\n"
+  end
+ 
+  defp add_attachments(body, %Bamboo.Email{attachments: attachments}, multi_part_mixed_delimiter) do
+    if attachments == nil do
+      body
+    else
+      attachment_part = for attachment <- attachments, into: "", do: add_attachment(attachment, multi_part_mixed_delimiter)
+      "#{body}#{attachment_part}"
+    end
+  end
+ 
+  defp add_attachment(attachment, multi_part_mixed_delimiter) do
+    if attachment == nil do
+      ""
+    else
+      ""
+      |> add_multipart_mixed_split(multi_part_mixed_delimiter)
+      |> add_attachment_header(attachment.filename)
+      |> add_attachment_body(attachment.path)
+    end
+  end
+ 
   defp add_to(body, %Bamboo.Email{to: recipients}) do
     add_smtp_header_line(body, :to, format_email_as_string(recipients, :to))
   end
@@ -174,6 +214,7 @@ defmodule Bamboo.SMTPAdapter do
   defp apply_default_configuration({:ok, value}, _default, config) when value != nil do
     config
   end
+
   defp apply_default_configuration(_not_found_value, {key, default_value}, config) do
     Map.put_new(config, key, default_value)
   end
@@ -183,8 +224,14 @@ defmodule Bamboo.SMTPAdapter do
     "----=_Part_#{random1}_#{random2}.#{random3}"
   end
 
+  defp generate_multi_part_mixed_delimiter do
+    << random1 :: size(32), random2 :: size(32), random3 :: size(32) >> = :crypto.strong_rand_bytes(12)
+    "----=_Part_#{random1}_#{random2}.#{random3}"
+  end
+ 
   defp body(%Bamboo.Email{} = email) do
     multi_part_delimiter = generate_multi_part_delimiter()
+    multi_part_mixed_delimiter = generate_multi_part_mixed_delimiter()
 
     ""
     |> add_subject(email)
@@ -194,14 +241,19 @@ defmodule Bamboo.SMTPAdapter do
     |> add_to(email)
     |> add_custom_headers(email)
     |> add_mime_header
+    |> add_multipart_mixed_header(multi_part_mixed_delimiter) #
+    |> add_ending_header                                      #
+    |> add_multipart_mixed_split(multi_part_mixed_delimiter)  #
     |> add_multipart_header(multi_part_delimiter)
     |> add_ending_header
     |> add_text_body(email, multi_part_delimiter)
     |> add_html_body(email, multi_part_delimiter)
     |> add_ending_multipart(multi_part_delimiter)
+    |> add_attachments(email, multi_part_mixed_delimiter)
+    |> add_ending_multipart(multi_part_mixed_delimiter)
   end
 
-  defp build_error({:ok, value}, _key, errors) when value != nil, do: errors
+  defp build_error({:ok, value}, _key, errors) when value != nil, do: errors  
   defp build_error(_not_found_value, key, errors) do
     ["Key #{key} is required for SMTP Adapter" | errors]
   end
