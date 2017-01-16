@@ -209,7 +209,7 @@ defmodule Bamboo.SMTPAdapterTest do
     [{{from, to, raw_email}, gen_smtp_config}] = FakeGenSMTP.fetch_sent_emails
     [multipart_header] =
       Regex.run(
-        ~r{Content-Type: multipart/mixed; boundary="([^"]+)"\r\n},
+        ~r{Content-Type: multipart/mixed; boundary=([^"]+)\r\n},
         raw_email,
         capture: :all_but_first)
 
