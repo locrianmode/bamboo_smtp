@@ -126,11 +126,13 @@ defmodule Bamboo.SMTPAdapter do
   end
 
   defp add_multipart_header(body, delimiter) do
-    add_smtp_header_line(body, "Content-Type", ~s(multipart/alternative; boundary="#{delimiter}"))
+    # add_smtp_header_line(body, "Content-Type", ~s(multipart/alternative; boundary="#{delimiter}"))
+    add_smtp_header_line(body, "Content-Type", ~s(multipart/alternative; boundary=#{delimiter}))
   end
  
   defp add_multipart_mixed_header(body, delimiter) do
-    add_smtp_header_line(body, "Content-Type", ~s(multipart/mixed; boundary="#{delimiter}"))  
+    # add_smtp_header_line(body, "Content-Type", ~s(multipart/mixed; boundary="#{delimiter}"))
+    add_smtp_header_line(body, "Content-Type", ~s(multipart/mixed; boundary=#{delimiter}))
   end
 
   defp add_smtp_header_line(body, type, content) when is_list(content) do
@@ -168,7 +170,7 @@ defmodule Bamboo.SMTPAdapter do
   end
 
   defp add_multipart_mixed_split(body, delimiter), do: "#{body}\r\n--#{delimiter}\r\n"
- 
+  
   defp add_attachment_header(body, filename) do
     "#{body}Content-Type: text/plain; charset=ISO-8859-1; name=\"#{filename}\"\r\n" <>
     "Content-Disposition: attachment; filename=\"#{filename}\"\r\n" <>
@@ -180,11 +182,11 @@ defmodule Bamboo.SMTPAdapter do
     file = File.read!(attachment)
     "#{body}\r\n#{Base.encode64(file)}\r\n"
   end
- 
+  
   defp add_attachments(body, %Bamboo.Email{attachments: attachments}, multi_part_mixed_delimiter) do
     if attachments == nil do
       body
-    else
+    else      
       attachment_part = for attachment <- attachments, into: "", do: add_attachment(attachment, multi_part_mixed_delimiter)
       "#{body}#{attachment_part}"
     end

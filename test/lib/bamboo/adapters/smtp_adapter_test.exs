@@ -306,7 +306,9 @@ defmodule Bamboo.SMTPAdapterTest do
 
     [multipart_header] =
       Regex.run(
-        ~r{Content-Type: multipart/alternative; boundary="([^"]+)"\r\n},
+                      # ~s(multipart/alternative; boundary=#{delimiter}))
+        ~r{Content-Type: multipart/alternative; boundary=([^"]+)\r\n},                     
+        # ~r{Content-Type: multipart/alternative; boundary="([^"]+)"\r\n},
         raw_email,
         capture: :all_but_first)
 
@@ -326,6 +328,7 @@ defmodule Bamboo.SMTPAdapterTest do
                                         "Content-Type: text/html;charset=UTF-8\r\n" <>
                                         "\r\n" <>
                                         "#{bamboo_email.html_body}\r\n")
+
     assert String.contains?(raw_email, "--#{multipart_header}\r\n" <>
                                         "Content-Type: text/plain;charset=UTF-8\r\n" <>
                                         "\r\n" <>
